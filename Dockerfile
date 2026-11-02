@@ -25,7 +25,7 @@ COPY apps/web ./
 RUN npm run build
 
 # ---- Stage 2: dependências Python (toolchain só existe aqui) ----------------
-FROM python:3.13-slim AS build-api
+FROM python:3.15-slim AS build-api
 
 COPY --from=ghcr.io/astral-sh/uv:0.13.5 /uv /uvx /bin/
 
@@ -51,7 +51,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 # MESMA base do build-api de propósito: o venv em /opt/venv tem pyvenv.cfg
 # apontando para /usr/local/bin/python3.13, que existe identicamente aqui.
 # Trocar a base (ex.: alpine, distro-slim diferente) quebra o venv.
-FROM python:3.13-slim AS runtime
+FROM python:3.15-slim AS runtime
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
