@@ -6,10 +6,14 @@ from types import SimpleNamespace
 from typing import Any
 
 import pytest
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import SimpleSpanProcessor
+from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 from procrastinate.exceptions import JobAborted
 from procrastinate.jobs import Job
 
 from app.core import jobs as jobs_core
+from app.core.observability import current_trace_id, inject_trace_context
 from app.jobs import app as jobs_app
 from app.jobs.app import defer_job, register_task
 from app.jobs.tasks.email import send_email
@@ -239,3 +243,28 @@ def test_import_paths_auto_discovers_task_modules() -> None:
     assert "app.jobs.tasks.email" in jobs_app.app.import_paths
     assert all(mod.startswith("app.jobs.tasks.") for mod in jobs_app.app.import_paths)
     assert "app.jobs.tasks.__init__" not in jobs_app.app.import_paths
+
+
+async def test_register_task_propagates_and_strips_trace_context_when_not_declared() -> None:
+    exporter = InMemorySpanExporter()
+    provider = TracerProvider()
+    provider.add_span_processor(SimpleSpanProcessor(exporter))
+    tracer = provider.get_tracer("test")
+    captured_trace_id: str | None = None
+
+    @register_task("test", "trace-strip", max_retries=0)
+    async def simple_task(ctx: Any, value: str) -> str:
+        nonlocal captured_trace_id
+        del ctx
+        captured_trace_id = current_trace_id()
+        return value
+
+    with tracer.start_as_current_span("http.request") as parent_span:
+        expected_trace_id = format(parent_span.get_span_context().trace_id, "032x")
+        payload = inject_trace_context({"value": "ok"})
+
+    ctx = SimpleNamespace(job=_job())
+    result = await simple_task(ctx, **payload)
+
+    assert result == "ok"
+    assert captured_trace_id == expected_trace_id

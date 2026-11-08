@@ -12,11 +12,14 @@ from opentelemetry.sdk.trace.sampling import Decision
 from app.core.config import settings
 from app.core.logging import add_trace_context
 from app.core.observability import (
+    JobTimer,
     build_resource,
     build_sampler,
     current_trace_id,
     extract_trace_context,
     inject_trace_context,
+    record_job_metric,
+    setup_metrics,
 )
 
 
@@ -108,3 +111,16 @@ def test_extract_trace_context_missing_returns_none() -> None:
     context = extract_trace_context({"to": "a@b.com"})
 
     assert not trace.get_current_span(context).get_span_context().is_valid
+
+
+def test_setup_metrics_disabled_without_endpoint() -> None:
+    assert setup_metrics() is None
+
+
+def test_job_timer_and_metrics_recording() -> None:
+    # Não deve levantar exceções mesmo com meter padrão
+    record_job_metric("email.send", "success", duration_s=0.05)
+    record_job_metric("email.send", "retry")
+
+    with JobTimer("test.job"):
+        pass

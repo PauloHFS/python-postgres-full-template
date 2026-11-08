@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import functools
 import importlib
+import inspect
 import json
 import os
 import pkgutil
@@ -26,6 +27,7 @@ from collections.abc import Awaitable, Callable
 from typing import Any
 
 import procrastinate
+from opentelemetry import trace
 from procrastinate.exceptions import JobAborted
 from procrastinate.jobs import Job
 from procrastinate.retry import RetryStrategy
@@ -34,6 +36,11 @@ from procrastinate.tasks import Task
 from app.core.config import settings
 from app.core.jobs import check_job_rate_limit, record_dead_letter
 from app.core.logging import get_logger
+from app.core.observability import (
+    JobTimer,
+    extract_trace_context,
+    inject_trace_context,
+)
 
 log = get_logger("jobs")
 
@@ -120,18 +127,39 @@ def register_task(
     strategy = RetryStrategy(max_attempts=max_retries) if max_retries > 0 else None
 
     def decorator(fn: Callable[..., Awaitable[Any]]) -> Task[..., Any, Any]:
+        params = inspect.signature(fn).parameters
+        accepts_trace_context = "trace_context" in params or any(
+            p.kind == inspect.Parameter.VAR_KEYWORD for p in params.values()
+        )
+
         @functools.wraps(fn)
         async def wrapped(*args: Any, **kwargs: Any) -> Any:
-            try:
-                return await fn(*args, **kwargs)
-            except JobAborted:
-                # Job abortado não é falha: o worker marca como aborted.
-                raise
-            except Exception as exc:
-                job = _context_job(args[0]) if pass_context and args else None
-                if _is_last_attempt(strategy, exc, job):
-                    await _record_failure(name, exc, job, kwargs)
-                raise
+            # Propaga span e métrica de execução do job
+            parent_ctx = extract_trace_context(kwargs)
+            call_kwargs = (
+                kwargs
+                if accepts_trace_context
+                else {k: v for k, v in kwargs.items() if k != "trace_context"}
+            )
+            tracer = trace.get_tracer("lean.worker")
+            with (
+                tracer.start_as_current_span(name, context=parent_ctx),
+                JobTimer(name) as timer,
+            ):
+                try:
+                    return await fn(*args, **call_kwargs)
+                except JobAborted:
+                    # Job abortado não é falha: o worker marca como aborted.
+                    timer.status = "aborted"
+                    raise
+                except Exception as exc:
+                    job = _context_job(args[0]) if pass_context and args else None
+                    if _is_last_attempt(strategy, exc, job):
+                        timer.status = "dead_letter"
+                        await _record_failure(name, exc, job, call_kwargs)
+                    else:
+                        timer.status = "retry"
+                    raise
 
         return app.task(
             queue=queue,
@@ -153,7 +181,10 @@ async def defer_job(
     rate_limit_window_s: int = 60,
     **kwargs: Any,
 ) -> int:
-    """Enfileira a task, aplicando o rate limit por kind/chave se configurado."""
+    """Enfileira a task, aplicando o rate limit por kind/chave se configurado.
+
+    Injeta automaticamente o contexto OTel W3C no payload se houver span ativo.
+    """
     if rate_limit_kind is not None and rate_limit_limit is not None:
         await check_job_rate_limit(
             rate_limit_kind,
@@ -161,7 +192,13 @@ async def defer_job(
             rate_limit_limit,
             rate_limit_window_s,
         )
-    return await task.defer_async(**kwargs)
+
+    if "trace_context" not in kwargs:
+        injected = inject_trace_context(kwargs)
+        task_payload = injected if injected.get("trace_context") else kwargs
+    else:
+        task_payload = kwargs
+    return await task.defer_async(**task_payload)
 
 
 def _discover_task_modules(package: str = "app.jobs.tasks") -> list[str]:

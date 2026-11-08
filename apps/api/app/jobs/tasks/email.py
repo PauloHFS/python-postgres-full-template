@@ -14,11 +14,8 @@ from collections.abc import Mapping
 from typing import Any
 
 import procrastinate
-from opentelemetry import trace
-from opentelemetry.context import Context
 
 from app.core import email as email_module
-from app.core.observability import extract_trace_context
 from app.jobs.app import register_task
 
 
@@ -34,15 +31,9 @@ async def send_email(
     """Envia e-mail. Retorna {"to": [...], "subject": "..."} como resultado do job.
 
     `ctx` fica disponível para middlewares/logs futuros; o corpo não o usa ainda.
-    Quando o payload traz `trace_context`, o span `email.send` é filho do span
-    que enfileirou o job; enfileiramentos manuais/CLI sem contexto rodam como
-    span raiz.
+    O span e métricas do job são gerenciados automaticamente pelo `register_task`.
     """
-    parent: Context = (
-        extract_trace_context({"trace_context": trace_context}) if trace_context else Context()
-    )
-    tracer = trace.get_tracer("lean.worker")
-    with tracer.start_as_current_span("email.send", context=parent):
-        recipients = to if isinstance(to, list) else [to]
-        await email_module.send_email(to=to, subject=subject, text=text, html=html)
-        return {"to": recipients, "subject": subject}
+    del ctx, trace_context  # ctx e trace_context tratados pelo wrapper da task
+    recipients = to if isinstance(to, list) else [to]
+    await email_module.send_email(to=to, subject=subject, text=text, html=html)
+    return {"to": recipients, "subject": subject}

@@ -26,7 +26,13 @@ ou `parentbased_traceidratio` (default); o ratio vem de `OTEL_SAMPLE_RATIO`
 (alias `OTEL_TRACES_SAMPLER_ARG`), default `1.0`.
 
 Cada resposta traz `X-Trace-Id` quando há span; logs incluem `trace_id`/`span_id`
-e o worker continua o trace do job (request → `email.enqueue` → `email.send`).
+e o worker continua o trace do job automaticamente via `defer_job` e `register_task`
+(ex.: request → `email.enqueue` → `email.send`), além de instrumentar cada query SQL.
+
+Métricas OTLP emitidas pela API e pelo worker (expostas no Prometheus via Collector):
+- **Rotas HTTP** (`FastAPIInstrumentor`): latência (`http.server.duration` para p95/p99 por rota) e taxa de erro por status HTTP.
+- **Execução de jobs** (`lean.jobs`): `jobs.execution.duration` (histograma em segundos) e `jobs.outcomes.total` (`status=success|retry|dead_letter|aborted`).
+- **Filas e DLQ no Postgres** (`lean.jobs.queue`, coletadas pelo worker a cada 15s): `jobs.queue.size` (`todo`/`doing` por fila), `jobs.queue.oldest_age` (idade em segundos do job `todo` mais antigo) e `jobs.dead_letters.size` (`pending`/`retried`/`discarded`).
 
 URLs:
 - Grafana: <http://localhost:3000> (user `admin`; senha = `GRAFANA_ADMIN_PASSWORD`)
