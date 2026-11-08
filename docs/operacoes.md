@@ -45,8 +45,7 @@ As portas do stack de observability (Grafana 3000, Tempo 3200, Prometheus 9090,
 OTel Collector 4317/4318) e do Mailpit (1025/8025) publicam **só em loopback**
 (`127.0.0.1`) — igual no dev local, e na VPS nada fica exposto na internet.
 
-Credenciais default do compose (Postgres `app`/`app`) são só para dev local.
-`GRAFANA_ADMIN_PASSWORD` precisa de um valor sempre que o Compose for interpolado: o compose usa `${GRAFANA_ADMIN_PASSWORD:?...}` e a interpolação é global — `docker compose up` falha sem ela mesmo sem o profile `observability` (o Grafana 11.3.1 cairia em `admin`/`admin`). Qualquer valor satisfaz o `config`; o valor real só importa quando o stack de observability sobe. `just validate-compose` (e o job do CI) injeta um valor de validação quando a variável está ausente, então não é preciso passá-la na invocação.
+Credenciais default do compose (Postgres `app`/`app` e Grafana `admin`/`admin`) são só para dev local (`127.0.0.1`). Sobrescreva `GRAFANA_ADMIN_PASSWORD` no `.env` se for utilizar o Grafana em ambiente compartilhado.
 
 Sem Sentry self-hosted (pesado demais). Se precisar de error tracking, use Sentry SaaS via `SENTRY_DSN`.
 

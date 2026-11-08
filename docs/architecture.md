@@ -1389,12 +1389,7 @@ AD-032 (proxy confiável) continuam vigentes; esta ADR as conecta ao caminho de 
   bucket (ou a aceitar IP forjado), sem erro no boot.
 
 **Rejeitados**:
-- **Um resource da Coolify por componente** (Postgres como database gerenciada + `api`/`worker`/
-  `migrate` como apps separadas): o pre-deployment command da Coolify é **pulado na primeira
-  deploy** — e a migration precisa rodar exatamente na primeira —, a ordem
-  `depends_on: service_completed_successfully` (`migrate` → `api`/`worker`) se perde, o gate de
-  boot do CI (job `docker`) deixa de testar o que roda em prod (drift entre compose testado e
-  deploy real) e as env vars + o build da mesma imagem passam a ser duplicados por resource.
+- **Monólito em compose único no Coolify com múltiplos satélites**: acoplar Postgres, aplicação e serviços de terceiros (GrowthBook, Mautic, Listmonk, OpenObserver) num único Compose faz com que qualquer rebuild da app reinicie ou ameace o banco e os satélites. Para ecossistemas com múltiplos serviços, o modelo adotado é o **Deploy Modular** (`docs/deploy.md`): PostgreSQL como resource Database nativo (com backups S3/R2 nativos), API e Worker como Applications via Dockerfile e migrations manuais sob demanda. O `docker-compose.yml` da raiz fica mantido para o desenvolvimento local e validação em CI.
 - Caddy ou `cloudflared` **dentro** do compose: o proxy é do Coolify ou da Cloudflare; o repo
   não mantém um segundo caminho de borda.
 - TLS no uvicorn: a app não tem nem deve ter material de chave; o certificado é do proxy.

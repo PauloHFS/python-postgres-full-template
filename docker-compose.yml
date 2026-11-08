@@ -299,11 +299,9 @@ services:
     profiles: ["observability"]
     restart: unless-stopped
     environment:
-      # Obrigatória: sem ela o Grafana 11.3.1 cai no default admin/admin.
-      # `:?` faz o compose recusar subir a stack sem credencial explícita.
-      # A interpolação do Compose é global: o deploy falha sem ela, mesmo sem
-      # o profile observability.
-      GF_SECURITY_ADMIN_PASSWORD: "${GRAFANA_ADMIN_PASSWORD:?defina GRAFANA_ADMIN_PASSWORD (a interpolação do Compose é global: o deploy falha sem ela, mesmo sem o profile observability)}"
+      # Default "admin" apenas para o profile observability local (127.0.0.1:3000).
+      # Sobrescreva GRAFANA_ADMIN_PASSWORD no .env se expor o Grafana.
+      GF_SECURITY_ADMIN_PASSWORD: "${GRAFANA_ADMIN_PASSWORD:-admin}"
     ports:
       # Loopback: o Grafana fica atrás do proxy do Coolify (ou de um tunnel) —
       # em 0.0.0.0 ele ficaria público na porta 3000 da VPS.

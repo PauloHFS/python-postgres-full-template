@@ -168,12 +168,11 @@ Este arquivo se aplica à raiz do repositório e a todos os diretórios abaixo d
 
 ### Backup e restauração
 
-- **Backup dentro do Coolify**: o Postgres do compose **não** é database resource da Coolify (`GET /api/v1/databases` do team → `[]`; `NewDatabaseTypes` não tem caso "service"), então o backup nativo é o **backup de volume** do `pgdata` (`tar.gz` do data dir) → S3/R2, com `stop_during_backup` (para os containers durante a cópia) para consistência; o restore é **file-level** (mesmo major do Postgres, banco parado). Por isso o restore confiável é o dump **lógico** do repo (`scripts/backup.sh` + `just test-restore` + job `restore-test` do CI). O backup lógico da Coolify (`pg_dump`/"Import Backup") só existe para **databases gerenciados** (o modelo rejeitado). **Sem PITR** em nenhum caminho: o restore devolve a última cópia. Ver AD-036.
-- `scripts/backup.sh` roda no **host** (exige `pg_dump`/`rclone` no PATH). Sem `RCLONE_BUCKET` ele roda em modo local e mantém o dump. A sanidade do dump é `pg_restore --list`, não o tamanho do arquivo.
+- **Backup em Produção (Coolify)**: no deploy modular oficial (PostgreSQL como recurso nativo Database da Coolify), o backup é feito diretamente pela interface do Coolify para S3/Cloudflare R2 via `pg_dump` lógico (com agendamento cron nativo, histórico e alertas, sem downtime e sem parar o container).
+- **Backup no host / testes**: os scripts `scripts/backup.sh` e `restore.sh` continuam disponíveis para dumps manuais e restaurações. `test-restore.sh` é a prova de integridade (cria bancos temporários, faz backup→restore e confere MD5, count, constraints e sequências), executado localmente via `just test-restore` e no CI pelo job `restore-test`.
 - `POSTGRES_CONTAINER` (ex.: `postgres`) coloca `backup.sh`/`restore.sh` no **modo container**: `pg_dump`/`pg_restore` rodam por `docker compose -f "$BACKUP_COMPOSE_FILE" exec -T` (sem porta publicada no host e sem client `pg_*` na máquina); `BACKUP_COMPOSE_FILE` aponta para o compose implantado (default `<repo>/docker-compose.yml`). Sem `POSTGRES_CONTAINER` o modo host exige `POSTGRES_HOST`/`POSTGRES_PORT` alcançáveis. Não use `COMPOSE_FILE` para isso: é variável do próprio Docker Compose.
 - O dump é criado com `umask 077`/`chmod 600` (contém hashes de senha, TOTP cifrado e PII). `BACKUP_ENCRYPT_PASSPHRASE` o cifra (`openssl enc -aes-256-cbc -pbkdf2`, extensão `.dump.enc`); sem ela o script avisa que o arquivo sai em claro. `BACKUP_KEEP_COUNT` (default 14) é a retenção local; `BACKUP_KEEP_DAYS` é a remota.
 - `scripts/restore.sh` exige alvo explícito (`--db`/`POSTGRES_RESTORE_DB`) e `--yes`: nunca adivinhe o banco de destino.
-- `scripts/test-restore.sh` é a prova: cria bancos `<db>_restore_test_src/dst`, faz backup→restore e confere count, `to_regclass`, md5 do conteúdo, índice, PK e sequência. Ele só opera em banco com `restore_test` no nome. `just test-restore` sobe o `postgres` do compose e roda o script dentro desse container (não exige client no host); o CI roda o mesmo script no job `restore-test`.
 
 ### CI e supply chain
 
@@ -181,7 +180,7 @@ Este arquivo se aplica à raiz do repositório e a todos os diretórios abaixo d
 - O job `e2e` é endurecido contra o travamento do download do Chromium (1x em 2 runs, CDN/apt do runner): cache dos browsers (`actions/cache`, `~/.cache/ms-playwright`), teto por tentativa (`timeout` + 3 tentativas) e `timeout-minutes` por step. O cache é salvo logo após o install, então o download caro não se repete quando o teste falha.
 - Dependabot (`.github/dependabot.yml`) abre PRs semanais para `pip`, `npm`, `github-actions` e `docker`; as instrumentações OTel sobem agrupadas.
 - O gate de auditoria do front no CI é `npm audit --omit=dev --audit-level=moderate` (local: `just web-audit`, `--audit-level=high`).
-- `just ci` roda `just validate-compose`, que materializa um `.env` a partir do `.env.example` se não houver um e usa `GRAFANA_ADMIN_PASSWORD=validation-only` quando a variável está ausente/vazia: **não** é preciso passá-la na invocação. A interpolação do Compose é global, então o valor de validação existe justamente para o gate passar sem a senha real, que só é exigida ao subir o stack de observability de verdade.
+- `just ci` roda `just validate-compose`, que materializa um `.env` a partir do `.env.example` se não houver um. O fallback do Compose no serviço Grafana (`${GRAFANA_ADMIN_PASSWORD:-admin}`) garante que validações e builds passem sem exigir a senha no deploy do app.
 - O deploy (`.github/workflows/deploy.yml`) publica no GHCR em push na `main`/tag `v*`, gera SBOM SPDX com syft e assina imagem + SBOM com cosign keyless (OIDC), com permissões mínimas (`packages: write`, `id-token: write`).
 
 ### SAST automatizado (Semgrep)
