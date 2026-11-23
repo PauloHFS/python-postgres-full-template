@@ -10,17 +10,17 @@ version = "0.1.0"
 requires-python = ">=3.13,<3.14"
 dependencies = [
     # --- Web ---
-    "fastapi==0.162.0",
+    "fastapi==0.165.0",
     "uvicorn[standard]==0.54.0",
     # python-multipart removido: nenhuma rota usa Form()/File()/UploadFile.
     # --- Config / validação ---
-    "pydantic==2.14.1",
+    "pydantic==2.14.4",
     "starlette==1.10.0",
-    "pydantic-settings==2.16.1",
-    "email-validator==2.3.0",
+    "pydantic-settings==2.16.3",
+    "email-validator==2.4.0",
     # --- Banco (async) ---
     # SQLAlchemy <2.1 por causa do opentelemetry-instrumentation-sqlalchemy.
-    "SQLAlchemy[asyncio]==2.0.55",
+    "SQLAlchemy[asyncio]==2.1.9",
     "asyncpg==0.32.0",
     "psycopg2-binary==2.9.13", # só para o Alembic rodar offline/env.py sync
     "alembic==1.20.1",
@@ -31,36 +31,36 @@ dependencies = [
     # --- Email SMTP (Mailpit dev, Resend/SES/Postmark/Mailgun/Brevo prod) ---
     "aiosmtplib==5.1.3",
     # --- Filas (Procrastinate, Postgres-first; sem Redis/Celery) ---
-    "procrastinate[sqlalchemy]==3.10.0",
+    "procrastinate[sqlalchemy]==3.12.0",
     # Driver psycopg3 (usado pelo connector async do Procrastinate). O extra
     # [binary] traz wheels com libpq embutida — necessário em macOS/dev sem libpq
     # do sistema; no Docker (libpq-dev) também funciona.
-    "psycopg[binary]==3.3.6",
+    "psycopg[binary]==3.3.9",
     # --- Logging / utilitários ---
     "structlog==26.1.0",
     "tenacity==9.2.1", # retries com backoff
     # --- 2FA (TOTP + passkeys) ---
-    "pyotp==2.10.0",
+    "pyotp==2.12.1",
     "webauthn==3.0.1",
     # --- Observability (OpenTelemetry + Sentry opcional) ---
-    "opentelemetry-api==1.45.1",
-    "opentelemetry-sdk==1.45.1",
-    "opentelemetry-exporter-otlp-proto-grpc==1.45.1",
-    "opentelemetry-instrumentation-fastapi==0.66b1",
-    "opentelemetry-instrumentation-sqlalchemy==0.66b1",
-    "opentelemetry-instrumentation-logging==0.66b1",
-    "sentry-sdk[fastapi]==2.73.0",
+    "opentelemetry-api==1.45.2",
+    "opentelemetry-sdk==1.45.2",
+    "opentelemetry-exporter-otlp-proto-grpc==1.45.2",
+    "opentelemetry-instrumentation-fastapi==0.66b2",
+    "opentelemetry-instrumentation-sqlalchemy==0.66b2",
+    "opentelemetry-instrumentation-logging==0.66b2",
+    "sentry-sdk[fastapi]==2.75.0",
 ]
 
 [dependency-groups]
 dev = [
     # --- Testes ---
-    "pytest==9.1.1",
-    "pytest-asyncio==1.4.1",
+    "pytest==9.2.0",
+    "pytest-asyncio==1.5.0",
     # --- Testes de propriedades (MPL-2.0) ---
-    "hypothesis==6.170.12",
+    "hypothesis==6.170.16",
     # --- Lint / type / SAST ---
-    "ruff==0.17.3",
+    "ruff==0.17.6",
     "pyright==1.1.414",
     "bandit==1.9.4",
 ]
